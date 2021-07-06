@@ -293,7 +293,6 @@ class Tracer:
     def __enter__(self):
         if DISABLED:
             return
-        thread_global.__dict__.setdefault('depth', -1)
         calling_frame = inspect.currentframe().f_back
         if not self._is_internal_frame(calling_frame):
             calling_frame.f_trace = self.trace
@@ -363,6 +362,7 @@ class Tracer:
                 else:
                     return None
 
+        thread_global.__dict__.setdefault('depth', -1)
         if event == 'call':
             thread_global.depth += 1
         indent = ' ' * 4 * thread_global.depth
@@ -423,11 +423,19 @@ class Tracer:
 
         for name, value_repr in local_reprs.items():
             if name not in old_local_reprs:
-                self.write('{indent}{newish_string}{name} = {value_repr}'.format(
-                                                                       **locals()))
+                #self.write('{indent}{newish_string}{name} = {value_repr}'.format(                                                                       **locals()))
+                try:
+                    self.write('zc {indent}{newish_string}{name} = {}, {value_repr}'.format(locals()['frame'].f_locals[name].shape, **locals()))
+                except AttributeError:   # in case built-in objects don't have .shape, e.g. int, list
+                    self.write('zc {indent}{newish_string}{name} = {value_repr}'.format(**locals()))
+
             elif old_local_reprs[name] != value_repr:
-                self.write('{indent}Modified var:.. {name} = {value_repr}'.format(
-                                                                   **locals()))
+#                 self.write('zc {indent}Modified var:.. {name} = {value_repr}'.format(**locals()))
+                try:
+                    self.write('zc {indent}Modified var:.. {name} = {}, {value_repr}'.format(locals()['frame'].f_locals[name].shape, **locals()))
+                except AttributeError:   # in case built-in objects don't have .shape, e.g. int, list
+                    self.write('zc {indent}Modified var:.. {name} = {value_repr}'.format(**locals()))
+                
 
         #                                                                     #
         ### Finished newish and modified variables. ###########################
@@ -485,14 +493,17 @@ class Tracer:
                                                             max_length=self.max_variable_length,
                                                             normalize=self.normalize,
                                                             )
-                self.write('{indent}Return value:.. {return_value_repr}'.
-                           format(**locals()))
+#                 self.write('{indent}Return value:.. {return_value_repr}'.format(**locals()))
+                try:
+                    self.write('zc {indent}Return value:.. {name} = {}, {value_repr}'.format(locals()['frame'].f_locals[name].shape, **locals()))
+                except AttributeError:   # in case built-in objects don't have .shape, e.g. int, list
+                    self.write('zc {indent}Return value:.. {name} = {value_repr}'.format(**locals()))
 
         if event == 'exception':
             exception = '\n'.join(traceback.format_exception_only(*arg[:2])).strip()
             if self.max_variable_length:
                 exception = utils.truncate(exception, self.max_variable_length)
-            self.write('{indent}Exception:..... {exception}'.
+            self.write('{indent}{exception}'.
                        format(**locals()))
 
         return self.trace
